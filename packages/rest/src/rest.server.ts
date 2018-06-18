@@ -17,7 +17,7 @@ import {
 } from './router/routing-table';
 import {OpenApiSpec, OperationObject} from '@loopback/openapi-v3-types';
 import {ServerRequest, ServerResponse} from 'http';
-import {HttpServer} from '@loopback/http-server';
+import {HttpServer, HttpServerOptions} from '@loopback/http-server';
 import * as cors from 'cors';
 import {Application, CoreBindings, Server} from '@loopback/core';
 import {getControllerSpec} from '@loopback/openapi-v3';
@@ -136,6 +136,7 @@ export class RestServer extends Context implements Server, HttpServerLike {
     return this._httpServer ? this._httpServer.listening : false;
   }
 
+  private restOptions: RestServerConfig;
   /**
    * @memberof RestServer
    * Creates an instance of RestServer.
@@ -173,6 +174,8 @@ export class RestServer extends Context implements Server, HttpServerLike {
     this._setupRequestHandler(options);
 
     this.bind(RestBindings.HANDLER).toDynamicValue(() => this.httpHandler);
+
+    this.restOptions = options;
   }
 
   protected _setupRequestHandler(options: RestServerConfig) {
@@ -584,17 +587,16 @@ export class RestServer extends Context implements Server, HttpServerLike {
 
     const port = await this.get<number | undefined>(RestBindings.PORT);
     const host = await this.get<string | undefined>(RestBindings.HOST);
-    const protocol = await this.get<'http' | 'https' | undefined>(
-      RestBindings.PROTOCOL,
-    );
 
-    this._httpServer = new HttpServer(this.requestHandler, {
+    const serverOptions = Object.assign({}, this.restOptions, {
       port: port,
       host: host,
-      protocol: protocol || 'http',
     });
 
+    this._httpServer = new HttpServer(this.requestHandler, serverOptions);
+
     await this._httpServer.start();
+
     this.bind(RestBindings.PORT).to(this._httpServer.port);
     this.bind(RestBindings.HOST).to(this._httpServer.host);
     this.bind(RestBindings.URL).to(this._httpServer.url);
@@ -635,11 +637,12 @@ export class RestServer extends Context implements Server, HttpServerLike {
  * @export
  * @interface RestServerConfig
  */
-export interface RestServerConfig {
-  host?: string;
-  port?: number;
+export interface RestServerOptions {
   cors?: cors.CorsOptions;
   apiExplorerUrl?: string;
   sequence?: Constructor<SequenceHandler>;
-  protocol?: 'http' | 'https';
 }
+
+export interface RestServerConfig
+  extends RestServerOptions,
+    HttpServerOptions {}

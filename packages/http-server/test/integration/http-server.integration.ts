@@ -2,10 +2,13 @@
 // Node module: @loopback/http-server
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
-import {HttpServer} from '../../';
+import {HttpServer, HttpServerOptions} from '../../';
 import {supertest, expect} from '@loopback/testlab';
 import * as makeRequest from 'request-promise-native';
 import {ServerRequest, ServerResponse, get, IncomingMessage} from 'http';
+import {get as httpsGet, Agent} from 'https';
+import * as path from 'path';
+import * as fs from 'fs';
 
 describe('HttpServer (integration)', () => {
   let server: HttpServer | undefined;
@@ -23,7 +26,7 @@ describe('HttpServer (integration)', () => {
   it('starts server', async () => {
     server = new HttpServer(dummyRequestHandler);
     await server.start();
-    supertest(server.url)
+    await supertest(server.url)
       .get('/')
       .expect(200);
   });
@@ -118,7 +121,7 @@ describe('HttpServer (integration)', () => {
     expect(server.address).to.be.undefined();
   });
 
-  it('exports started', async () => {
+  it('exports listening', async () => {
     server = new HttpServer(dummyRequestHandler);
     await server.start();
     expect(server.listening).to.be.true();
@@ -134,6 +137,21 @@ describe('HttpServer (integration)', () => {
     expect(anotherServer.start()).to.be.rejectedWith(/EADDRINUSE/);
   });
 
+  it('supports HTTPS protocol with key and certificate files', async () => {
+    const httpsServer: HttpServer = givenHttpsServer();
+    await httpsServer.start();
+    const response = await httpsGetAsync(httpsServer.host!, httpsServer.port);
+    expect(response.statusCode).to.equal(200);
+  });
+
+  it('supports HTTPS protocol with a pfx file', async () => {
+    const usePfx = true;
+    const httpsServer: HttpServer = givenHttpsServer(usePfx);
+    await httpsServer.start();
+    const response = await httpsGetAsync(httpsServer.host!, httpsServer.port);
+    expect(response.statusCode).to.equal(200);
+  });
+
   function dummyRequestHandler(req: ServerRequest, res: ServerResponse): void {
     res.end();
   }
@@ -146,6 +164,37 @@ describe('HttpServer (integration)', () => {
   function getAsync(url: string): Promise<IncomingMessage> {
     return new Promise((resolve, reject) => {
       get(url, resolve).on('error', reject);
+    });
+  }
+
+  function givenHttpsServer(usePfx: boolean = false): HttpServer {
+    const options: HttpServerOptions = {protocol: 'https'};
+    if (usePfx) {
+      const pfxPath = path.join(__dirname, 'pfx.pfx');
+      options.pfx = fs.readFileSync(pfxPath);
+      options.passphrase = 'loopback4';
+    } else {
+      const keyPath = path.join(__dirname, 'key.pem');
+      const certPath = path.join(__dirname, 'cert.pem');
+      options.key = fs.readFileSync(keyPath);
+      options.cert = fs.readFileSync(certPath);
+    }
+    return new HttpServer(dummyRequestHandler, options);
+  }
+
+  function httpsGetAsync(host: string, port: number): Promise<IncomingMessage> {
+    const options = {
+      host: host,
+      port: port,
+      path: '/',
+      cert: fs.readFileSync(path.join(__dirname, 'cert.pem')),
+      agent: new Agent({
+        rejectUnauthorized: false,
+      }),
+    };
+
+    return new Promise((resolve, reject) => {
+      httpsGet(options, resolve).on('error', reject);
     });
   }
 });

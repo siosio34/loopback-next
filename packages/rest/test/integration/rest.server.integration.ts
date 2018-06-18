@@ -6,7 +6,11 @@
 import {Application, ApplicationConfig} from '@loopback/core';
 import {expect, createClientForHandler} from '@loopback/testlab';
 import {Route, RestBindings, RestServer, RestComponent} from '../..';
+import {IncomingMessage} from 'http';
+import {get as httpsGet, Agent} from 'https';
 import * as yaml from 'js-yaml';
+import * as path from 'path';
+import * as fs from 'fs';
 
 describe('RestServer (integration)', () => {
   it('updates rest.port binding when listening on ephemeral port', async () => {
@@ -237,9 +241,66 @@ servers:
     expect(response.get('Access-Control-Allow-Credentials')).to.equal('true');
   });
 
+  it('supports HTTPS protocol with key and certificate files', async () => {
+    const keyPath = path.join(__dirname, 'key.pem');
+    const certPath = path.join(__dirname, 'cert.pem');
+    const server = await givenAServer({
+      rest: {
+        port: 0,
+        protocol: 'https',
+        key: fs.readFileSync(keyPath),
+        cert: fs.readFileSync(certPath),
+      },
+    });
+    server.handler(({response}, sequence) => {
+      response.end();
+    });
+    await server.start();
+    const host = server.getSync(RestBindings.HOST);
+    const port = server.getSync(RestBindings.PORT);
+    const res = await httpsGetAsync(host!, port);
+    expect(res.statusCode).to.equal(200);
+  });
+
+  it('supports HTTPS protocol with a pfx file', async () => {
+    const pfxPath = path.join(__dirname, 'pfx.pfx');
+    const server = await givenAServer({
+      rest: {
+        port: 0,
+        protocol: 'https',
+        pfx: fs.readFileSync(pfxPath),
+        passphrase: 'loopback4',
+      },
+    });
+    server.handler(({response}, sequence) => {
+      response.end();
+    });
+    await server.start();
+    const host = server.getSync(RestBindings.HOST);
+    const port = server.getSync(RestBindings.PORT);
+    const res = await httpsGetAsync(host!, port);
+    expect(res.statusCode).to.equal(200);
+  });
+
   async function givenAServer(options?: ApplicationConfig) {
     const app = new Application(options);
     app.component(RestComponent);
     return await app.getServer(RestServer);
+  }
+
+  function httpsGetAsync(host: string, port: number): Promise<IncomingMessage> {
+    const options = {
+      host: host,
+      port: port,
+      path: '/',
+      cert: fs.readFileSync(path.join(__dirname, 'cert.pem')),
+      agent: new Agent({
+        rejectUnauthorized: false,
+      }),
+    };
+
+    return new Promise((resolve, reject) => {
+      httpsGet(options, resolve).on('error', reject);
+    });
   }
 });
