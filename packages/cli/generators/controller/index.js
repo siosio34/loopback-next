@@ -194,6 +194,11 @@ module.exports = class ControllerGenerator extends ArtifactGenerator {
     if (debug.enabled) {
       debug(`Artifact output filename set to: ${this.artifactInfo.outFile}`);
     }
+
+    this.artifactInfo.updateIndexes = [
+      {dir: this.artifactInfo.outDir, file: this.artifactInfo.outFile},
+    ];
+
     // renames the file
     let template = 'controller-template.ts.ejs';
     switch (this.artifactInfo.controllerType) {

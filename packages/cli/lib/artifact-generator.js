@@ -96,16 +96,25 @@ module.exports = class ArtifactGenerator extends BaseGenerator {
        * this.artifactInfo.disableIndexUpdate = true;
        */
       if (
-        this.artifactInfo.outDir &&
-        this.artifactInfo.outFile &&
+        this.artifactInfo.updateIndexes &&
         !this.artifactInfo.disableIndexUpdate
       ) {
-        await updateIndex(this.artifactInfo.outDir, this.artifactInfo.outFile);
-        // Output for users
-        this.log(
-          chalk.green('   update'),
-          `${this.artifactInfo.relPath}/index.ts`,
-        );
+        for (let i = 0; i < this.artifactInfo.updateIndexes.length; i++) {
+          const update = this.artifactInfo.updateIndexes[i];
+          await updateIndex(update.dir, update.file);
+          // Output for users
+          const updateDirRelPath = path.relative(
+            this.artifactInfo.relPath,
+            update.dir,
+          );
+
+          this.log(
+            chalk.green('   update'),
+            `${this.artifactInfo.relPath}/${updateDirRelPath}${
+              updateDirRelPath.length > 0 ? '/' : ''
+            }index.ts`,
+          );
+        }
       }
 
       // User Output
