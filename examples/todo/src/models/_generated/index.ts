@@ -3,6 +3,4 @@
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
 
-import {TodoBase} from './_generated';
-
-export class Todo extends TodoBase {}
+export * from './todo.base.model';
