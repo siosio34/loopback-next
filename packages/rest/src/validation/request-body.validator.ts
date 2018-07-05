@@ -7,16 +7,15 @@ import {
   RequestBodyObject,
   SchemaObject,
   SchemasObject,
-  isReferenceObject,
 } from '@loopback/openapi-v3-types';
 import * as AJV from 'ajv';
 import * as debugModule from 'debug';
 import * as util from 'util';
 import {HttpErrors} from '..';
-import {RestHttpErrors} from '../coercion/rest-http-error';
+import {RestHttpErrors} from '..';
+import * as _ from 'lodash';
 
 const toJsonSchema = require('openapi-schema-to-json-schema');
-
 const debug = debugModule('loopback:rest:validation');
 
 export function validateRequestBody(
@@ -28,45 +27,23 @@ export function validateRequestBody(
   if (requestBodySpec && requestBodySpec.required && body == undefined)
     throw new HttpErrors.BadRequest('Request body is required');
 
-  const schema = getRequestBodySchema(requestBodySpec, globalSchemas || {});
+  const schema = getRequestBodySchema(requestBodySpec);
   debug('Request body schema: %j', util.inspect(schema, {depth: null}));
   if (!schema) return;
 
   const jsonSchema = convertToJsonSchema(schema);
-  validateValueAgainstJsonSchema(body, jsonSchema);
+  validateValueAgainstJsonSchema(body, jsonSchema, globalSchemas);
 }
 
 function getRequestBodySchema(
   requestBodySpec: RequestBodyObject | undefined,
-  globalSchemas: SchemasObject,
 ): SchemaObject | undefined {
   if (!requestBodySpec) return;
 
   const content = requestBodySpec.content;
   // FIXME(bajtos) we need to find the entry matching the content-type
   // header from the incoming request (e.g. "application/json").
-  const schema = content[Object.keys(content)[0]].schema;
-  if (!schema || !isReferenceObject(schema)) {
-    return schema;
-  }
-
-  return resolveSchemaReference(schema.$ref, globalSchemas);
-}
-
-function resolveSchemaReference(ref: string, schemas: SchemasObject) {
-  // A temporary solution for resolving schema references produced
-  // by @loopback/repository-json-schema. In the future, we should
-  // support arbitrary references anywhere in the OpenAPI spec.
-  // See https://github.com/strongloop/loopback-next/issues/435
-  const match = ref.match(/^#\/components\/schemas\/([^\/]+)$/);
-  if (!match) throw new Error(`Unsupported schema reference format: ${ref}`);
-  const schemaId = match[1];
-
-  debug(`Resolving schema reference ${ref} (schema id ${schemaId}).`);
-  if (!(schemaId in schemas)) {
-    throw new Error(`Invalid reference ${ref} - schema ${schemaId} not found.`);
-  }
-  return schemas[schemaId];
+  return content[Object.keys(content)[0]].schema;
 }
 
 function convertToJsonSchema(openapiSchema: SchemaObject) {
@@ -79,11 +56,23 @@ function convertToJsonSchema(openapiSchema: SchemaObject) {
   return jsonSchema;
 }
 
-// tslint:disable-next-line:no-any
-function validateValueAgainstJsonSchema(body: any, schema: any) {
-  const ajv = new AJV({allErrors: true});
+function validateValueAgainstJsonSchema(
+  // tslint:disable-next-line:no-any
+  body: any,
+  // tslint:disable-next-line:no-any
+  schema: any,
+  globalSchemas?: SchemasObject,
+) {
+  let schemaWithRef = _.cloneDeep(schema);
+  schemaWithRef.components = {
+    schemas: globalSchemas,
+  };
+
+  const ajv = new AJV({
+    allErrors: true,
+  });
   try {
-    if (ajv.validate(schema, body)) {
+    if (ajv.validate(schemaWithRef, body)) {
       debug('Request body passed AJV validation.');
       return;
     }
