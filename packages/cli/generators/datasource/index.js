@@ -265,11 +265,6 @@ module.exports = class DataSourceGenerator extends ArtifactGenerator {
       this.artifactInfo.outFile,
     );
 
-    // Update Indexes
-    this.artifactInfo.updateIndexes = [
-      {dir: this.artifactInfo.outDir, file: this.artifactInfo.outFile},
-    ];
-
     // template path
     const classTemplatePath = this.templatePath('datasource.ts.ejs');
 

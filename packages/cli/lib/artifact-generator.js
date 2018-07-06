@@ -94,18 +94,33 @@ module.exports = class ArtifactGenerator extends BaseGenerator {
        * Both those properties must be present for this to happen. Optionally,
        * this can be disabled even if the properties are present by setting:
        * this.artifactInfo.disableIndexUpdate = true;
+       *
+       * Multiple indexes / files can be updated by providing an array of
+       * index update objects as follows:
+       * this.artifactInfo.updateIndexes = [{
+       *   dir: 'directory in which to update index.ts',
+       *   file: 'file to add to index.ts',
+       * }, {dir: '...', file: '...'}]
        */
-      if (
-        this.artifactInfo.updateIndexes &&
-        !this.artifactInfo.disableIndexUpdate
-      ) {
-        for (let i = 0; i < this.artifactInfo.updateIndexes.length; i++) {
-          const update = this.artifactInfo.updateIndexes[i];
-          await updateIndex(update.dir, update.file);
+      if (!this.artifactInfo.disableIndexUpdate) {
+        if (
+          !this.artifactInfo.updateIndexes &&
+          this.artifactInfo.outDir &&
+          this.artifactInfo.outFile
+        ) {
+          this.artifactInfo.updateIndexes = [
+            {dir: this.artifactInfo.outDir, file: this.artifactInfo.outFile},
+          ];
+        } else {
+          this.artifactInfo.updateIndexes = [];
+        }
+
+        for (const idx of this.artifactInfo.updateIndexes) {
+          await updateIndex(idx.dir, idx.file);
           // Output for users
           const updateDirRelPath = path.relative(
             this.artifactInfo.relPath,
-            update.dir,
+            idx.dir,
           );
 
           this.log(

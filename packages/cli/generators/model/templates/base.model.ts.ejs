@@ -1,8 +1,0 @@
-import {Entity, ModelDefinition} from '@loopback/repository';
-const modelDef = require('../<%= jsonFileName %>');
-
-export class <%= baseClassName %> extends Entity {
-  static definition = new ModelDefinition(modelDef);
-  <% Object.entries(properties).forEach(([key, val]) => { %>
-  <%= key %><%if (!val.required) {%>?<% } %>: <%= val.tsType %>;<% }) %>
-}

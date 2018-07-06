@@ -66,7 +66,7 @@ module.exports = class ModelGenerator extends ArtifactGenerator {
     return super.promptArtifactName();
   }
 
-  promptBase() {
+  async promptBase() {
     this.artifactInfo.className = utils.toClassName(this.artifactInfo.name);
     const baseOptions = ['Entity'];
     const prompts = [
@@ -82,20 +82,17 @@ module.exports = class ModelGenerator extends ArtifactGenerator {
       },
     ];
 
-    return this.prompt(prompts).then(props => {
-      if (!props.base) props.base = baseOptions[0];
-      Object.assign(this.artifactInfo, props);
+    const answers = await this.prompt(prompts);
+    if (!answers.base) answers.base = baseOptions[0];
+    Object.assign(this.artifactInfo, answers);
 
-      this.log(
-        `Let's add a property to ${chalk.yellow(this.artifactInfo.className)}`,
-      );
-
-      return props;
-    });
+    this.log(
+      `Let's add a property to ${chalk.yellow(this.artifactInfo.className)}`,
+    );
   }
 
   // Prompt for a property name
-  promptPropertyName() {
+  async promptPropertyName() {
     this.log(`Enter an empty property name when done`);
 
     delete this.propName;
@@ -113,18 +110,17 @@ module.exports = class ModelGenerator extends ArtifactGenerator {
       },
     ];
 
-    return this.prompt(prompts).then(props => {
-      if (props.propName) {
-        this.artifactInfo.properties[props.propName] = {};
-        this.propName = props.propName;
-      }
-      return this._promptPropertyInfo();
-    });
+    const answers = await this.prompt(prompts);
+    if (answers.propName) {
+      this.artifactInfo.properties[answers.propName] = {};
+      this.propName = answers.propName;
+    }
+    return this._promptPropertyInfo();
   }
 
   // Internal Method. Called when a new property is entered.
   // Prompts the user for more information about the property to be added.
-  _promptPropertyInfo() {
+  async _promptPropertyInfo() {
     if (!this.propName) {
       return true;
     } else {
@@ -142,7 +138,7 @@ module.exports = class ModelGenerator extends ArtifactGenerator {
           choices: this.typeChoices.filter(choice => {
             return choice !== 'array';
           }),
-          when: function(answers) {
+          when: answers => {
             return answers.type === 'array';
           },
         },
@@ -151,12 +147,12 @@ module.exports = class ModelGenerator extends ArtifactGenerator {
           message: 'Is ID field?',
           type: 'confirm',
           default: false,
-          when: function(answers) {
+          when: answers => {
             return (
               !this.idFieldSet &&
               !['array', 'object', 'buffer'].includes(answers.type)
             );
-          }.bind(this),
+          },
         },
         {
           name: 'required',
@@ -167,32 +163,28 @@ module.exports = class ModelGenerator extends ArtifactGenerator {
         {
           name: 'default',
           message: `Default value ${chalk.yellow('[leave blank for none]')}:`,
-          when: function(answers) {
-            return (
-              ![null, 'buffer', 'any'].includes(answers.type) &&
-              this.typeChoices.includes(answers.type)
-            );
-          }.bind(this),
+          when: answers => {
+            return ![null, 'buffer', 'any'].includes(answers.type);
+          },
         },
       ];
 
-      return this.prompt(prompts).then(props => {
-        if (props.default === '') {
-          delete props.default;
-        }
+      const answers = await this.prompt(prompts);
+      if (answers.default === '') {
+        delete answers.default;
+      }
 
-        Object.assign(this.artifactInfo.properties[this.propName], props);
-        if (props.id) {
-          this.idFieldSet = true;
-        }
+      Object.assign(this.artifactInfo.properties[this.propName], answers);
+      if (answers.id) {
+        this.idFieldSet = true;
+      }
 
-        this.log(
-          `Let's add another property to ${chalk.yellow(
-            this.artifactInfo.className,
-          )}`,
-        );
-        return this.promptPropertyName();
-      });
+      this.log(
+        `Let's add another property to ${chalk.yellow(
+          this.artifactInfo.className,
+        )}`,
+      );
+      return this.promptPropertyName();
     }
   }
 
@@ -200,45 +192,16 @@ module.exports = class ModelGenerator extends ArtifactGenerator {
     if (this.shouldExit()) return false;
 
     // Data for templates
-    this.artifactInfo.baseClassName = `${this.artifactInfo.className}Base`;
     this.artifactInfo.fileName = utils.kebabCase(this.artifactInfo.name);
-    this.artifactInfo.jsonFileName = `${this.artifactInfo.fileName}.model.json`;
-    // prettier-ignore
-    this.artifactInfo.baseOutFile = `${this.artifactInfo.fileName}.base.model.ts`;
     this.artifactInfo.outFile = `${this.artifactInfo.fileName}.model.ts`;
 
-    // Resolved Output Paths
-    const jsonPath = this.destinationPath(
-      this.artifactInfo.outDir,
-      this.artifactInfo.jsonFileName,
-    );
+    // Resolved Output Path
     const tsPath = this.destinationPath(
       this.artifactInfo.outDir,
       this.artifactInfo.outFile,
     );
-    const baseTsPath = this.destinationPath(
-      this.artifactInfo.outDir,
-      '_generated',
-      this.artifactInfo.baseOutFile,
-    );
 
-    this.artifactInfo.updateIndexes = [
-      {dir: this.artifactInfo.outDir, file: this.artifactInfo.outFile},
-      {
-        dir: path.resolve(this.artifactInfo.outDir, '_generated'),
-        file: this.artifactInfo.baseOutFile,
-      },
-    ];
-
-    const baseModelTemplatePath = this.templatePath('base.model.ts.ejs');
     const modelTemplatePath = this.templatePath('model.ts.ejs');
-
-    // Model JSON
-    const model = _.cloneDeep({
-      name: this.artifactInfo.className,
-      extends: this.artifactInfo.base,
-      properties: this.artifactInfo.properties,
-    });
 
     // Set up types for Templating
     const TS_TYPES = ['string', 'number', 'object', 'boolean', 'any'];
@@ -260,10 +223,26 @@ module.exports = class ModelGenerator extends ArtifactGenerator {
       if (NON_TS_TYPES.includes(val.tsType)) {
         val.tsType = 'string';
       }
+
+      if (
+        val.defaultValue &&
+        NON_TS_TYPES.concat(['string', 'any']).includes(val.type)
+      ) {
+        val.defaultValue = `'${val.defaultValue}'`;
+      }
+
+      // Convert Type to include '' for template
+      val.type = `'${val.type}'`;
+
+      if (!val.required) {
+        delete val.required;
+      }
+
+      if (!val.id) {
+        delete val.id;
+      }
     });
 
-    this.fs.writeJSON(jsonPath, model);
-    this.fs.copyTpl(baseModelTemplatePath, baseTsPath, this.artifactInfo);
     this.fs.copyTpl(modelTemplatePath, tsPath, this.artifactInfo);
   }
 
