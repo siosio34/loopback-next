@@ -22,6 +22,24 @@ const TODO_SCHEMA = {
   required: ['title'],
 };
 
+// a schema that contains a property with referenced schema
+const ACCOUNT_SCHEMA = {
+  title: 'Account',
+  properties: {
+    title: {type: 'string'},
+    address: {$ref: '#/components/schemas/Address'},
+  },
+};
+
+const ADDRESS_SCHEMA = {
+  title: 'Address',
+  properties: {
+    city: {type: 'string'},
+    unit: {type: 'number'},
+    isOwner: {type: 'boolean'},
+  },
+};
+
 describe('validateRequestBody', () => {
   it('accepts valid data omitting optional properties', () => {
     validateRequestBody({title: 'work'}, aBodySpec(TODO_SCHEMA));
@@ -94,7 +112,7 @@ describe('validateRequestBody', () => {
   });
 
   context('rejects array of data with wrong type - ', () => {
-    it('string', () => {
+    it('primitive types', () => {
       const schema: SchemaObject = {
         type: 'object',
         properties: {
@@ -113,7 +131,7 @@ describe('validateRequestBody', () => {
       );
     });
 
-    it('$ref', () => {
+    it('first level $ref', () => {
       const schema: SchemaObject = {
         type: 'array',
         items: {
@@ -128,7 +146,7 @@ describe('validateRequestBody', () => {
       );
     });
 
-    it('nested $ref', () => {
+    it('nested $ref in schema', () => {
       const schema: SchemaObject = {
         type: 'object',
         properties: {
@@ -150,6 +168,30 @@ describe('validateRequestBody', () => {
         },
         aBodySpec(schema),
         {Todo: TODO_SCHEMA},
+      );
+    });
+
+    it('nested $ref in reference', () => {
+      const schema: SchemaObject = {
+        type: 'object',
+        properties: {
+          accounts: {
+            type: 'array',
+            items: {
+              $ref: '#/components/schemas/Account',
+            },
+          },
+        },
+      };
+      verifyValidationRejectsInputWithError(
+        /accounts\[0\]\.address\.city should be string/,
+        {
+          accounts: [
+            {title: 'an account with invalid address', address: {city: 1}},
+          ],
+        },
+        aBodySpec(schema),
+        {Account: ACCOUNT_SCHEMA, Address: ADDRESS_SCHEMA},
       );
     });
   });
