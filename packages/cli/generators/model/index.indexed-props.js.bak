@@ -96,10 +96,11 @@ module.exports = class ModelGenerator extends ArtifactGenerator {
     this.log(`Enter an empty property name when done`);
 
     delete this.propName;
+    const name = `propName${this.propCounter}`;
 
     const prompts = [
       {
-        name: 'propName',
+        name: name,
         message: 'Enter the property name:',
         validate: function(val) {
           if (val) {
@@ -112,9 +113,9 @@ module.exports = class ModelGenerator extends ArtifactGenerator {
     ];
 
     const answers = await this.prompt(prompts);
-    if (answers.propName) {
-      this.artifactInfo.properties[answers.propName] = {};
-      this.propName = answers.propName;
+    if (answers[name]) {
+      this.artifactInfo.properties[answers[name]] = {};
+      this.propName = answers[name];
     }
     return this._promptPropertyInfo();
   }
@@ -127,13 +128,13 @@ module.exports = class ModelGenerator extends ArtifactGenerator {
     } else {
       const prompts = [
         {
-          name: 'type',
+          name: `type${this.propCounter}`,
           message: 'Property type:',
           type: 'list',
           choices: this.typeChoices,
         },
         {
-          name: 'arrayType',
+          name: `arrayType${this.propCounter}`,
           message: 'Type of array items:',
           type: 'list',
           choices: this.typeChoices.filter(choice => {
@@ -144,7 +145,7 @@ module.exports = class ModelGenerator extends ArtifactGenerator {
           },
         },
         {
-          name: 'id',
+          name: `id${this.propCounter}`,
           message: 'Is ID field?',
           type: 'confirm',
           default: false,
@@ -156,13 +157,13 @@ module.exports = class ModelGenerator extends ArtifactGenerator {
           },
         },
         {
-          name: 'required',
+          name: `required${this.propCounter}`,
           message: 'Required?:',
           type: 'confirm',
           default: false,
         },
         {
-          name: 'default',
+          name: `default${this.propCounter}`,
           message: `Default value ${chalk.yellow('[leave blank for none]')}:`,
           when: answers => {
             return ![null, 'buffer', 'any'].includes(answers.type);
@@ -175,8 +176,16 @@ module.exports = class ModelGenerator extends ArtifactGenerator {
         delete answers.default;
       }
 
-      Object.assign(this.artifactInfo.properties[this.propName], answers);
-      if (answers.id) {
+      // Normalize the Answers Object
+      const normal = {};
+      normal.type = answers[`type${this.propCounter}`];
+      normal.arrayType = answers[`arrayType${this.propCounter}`];
+      normal.id = answers[`id${this.propCounter}`];
+      normal.required = answers[`required${this.propCounter}`];
+      normal.default = answers[`default${this.propCounter}`];
+
+      Object.assign(this.artifactInfo.properties[this.propName], normal);
+      if (normal.id) {
         this.idFieldSet = true;
       }
 

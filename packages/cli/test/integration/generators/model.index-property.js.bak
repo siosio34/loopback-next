@@ -36,7 +36,7 @@ const expectedModelFile = path.join(SANDBOX_PATH, 'src/models/test.model.ts');
 describe('model-generator extending BaseGenerator', baseTests);
 describe('generator-loopback4:model', tests);
 
-describe('lb4 model integration', () => {
+describe.only('lb4 model integration', () => {
   beforeEach('reset sandbox', () => sandbox.reset());
 
   it('does not run without package.json', () => {
@@ -86,7 +86,31 @@ describe('lb4 model integration', () => {
       basicModelFileChecks();
     });
   });
+
+  describe('model generator: string properties', () => {
+    propertyTests('string');
+  });
 });
+
+function propertyTests(type, defVal) {
+  it(`creates ${type} property: id-false, required-false, default-null`, async () => {
+    const prompts = {
+      name: 'test',
+      propName0: 'testprop',
+      type0: type,
+      id0: false,
+      required0: false,
+      default0: null,
+      // propName1: null,
+    };
+
+    await testUtils
+      .executeGenerator(generator)
+      .inDir(SANDBOX_PATH, () => testUtils.givenLBProject(SANDBOX_PATH))
+      .withArguments('test')
+      .withPrompts(prompts);
+  });
+}
 
 // Checks to ensure expected files exist with the current file contents
 function basicModelFileChecks() {
